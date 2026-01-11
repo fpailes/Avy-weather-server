@@ -6,6 +6,3 @@ services:
     buildCommand: bash build.sh
     startCommand: gunicorn app:app
     plan: free
-    envVars:
-      - key: PLAYWRIGHT_BROWSERS_PATH
-        value: /opt/render/project/src/browsers
