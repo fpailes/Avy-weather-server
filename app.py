@@ -40,7 +40,7 @@ def scrape_forecast_playwright(zone_slug):
     url = f"https://nwac.us/avalanche-forecast/#{zone_slug}"
     
     try:
-        print(f"Rendering {url} with Playwright...")
+        print(f"Rendering {url} with Playwright...", flush=True)
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
@@ -57,7 +57,7 @@ def scrape_forecast_playwright(zone_slug):
             text = page.inner_text("body")
             browser.close()
             
-            print(f"Successfully rendered {zone_slug}")
+            print(f"Successfully rendered {zone_slug}", flush=True)
             
             # Parse the content
             danger_pattern = r'(Low|Moderate|Considerable|High|Extreme)'
@@ -78,7 +78,7 @@ def scrape_forecast_playwright(zone_slug):
             lower = find_danger("Lower Elevations")
             
             if upper == "Unknown" and middle == "Unknown" and lower == "Unknown":
-                print(f"Could not parse danger levels for {zone_slug}")
+                print(f"Could not parse danger levels for {zone_slug}", flush=True)
                 return None
             
             # Extract publish date
@@ -97,40 +97,43 @@ def scrape_forecast_playwright(zone_slug):
                 "cached_at": datetime.now().isoformat()
             }
     except Exception as e:
-        print(f"Error scraping {zone_slug}: {e}")
+        print(f"Error scraping {zone_slug}: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         return None
 
 
 def update_cache():
     """Update the cache with fresh forecast data."""
     cache["is_updating"] = True
-    print("Updating forecast cache...")
+    print("Updating forecast cache...", flush=True)
     forecasts = {}
     
     for zone_key, zone_slug in ZONES.items():
+        print(f"Starting scrape for {zone_key}...", flush=True)
         forecast = scrape_forecast_playwright(zone_slug)
         if forecast:
             forecasts[zone_key] = forecast
-            print(f"✓ Cached {zone_key}")
+            print(f"✓ Cached {zone_key}", flush=True)
         else:
-            print(f"✗ Failed to cache {zone_key}")
+            print(f"✗ Failed to cache {zone_key}", flush=True)
     
     cache["last_update"] = datetime.now()
     cache["forecasts"] = forecasts
     cache["is_updating"] = False
-    print(f"Cache updated at {cache['last_update']}")
+    print(f"Cache updated at {cache['last_update']} with {len(forecasts)} zones", flush=True)
 
 
 def update_cache_background():
     """Trigger cache update in background thread."""
     if cache["is_updating"]:
-        print("Cache update already in progress, skipping")
+        print("Cache update already in progress, skipping", flush=True)
         return
     
     thread = threading.Thread(target=update_cache)
     thread.daemon = True
     thread.start()
-    print("Background cache update started")
+    print(f"Background cache update started (thread: {thread.name})", flush=True)
 
 
 def is_cache_stale():
