@@ -3,7 +3,7 @@
 pip install -r requirements.txt
 
 # Install Playwright browsers
-python -m playwright install chromium
+playwright install chromium
 
 # Install required system dependencies for Playwright on Render
-python -m playwright install-deps chromium
+playwright install-deps chromium
