@@ -218,3 +218,7 @@ if __name__ == '__main__':
     # Run server
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+else:
+    # When imported by gunicorn, start background cache update
+    print("App imported by gunicorn, starting background cache update", flush=True)
+    update_cache_background()
