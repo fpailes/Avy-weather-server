@@ -27,70 +27,73 @@ ZONES = {
 }
 
 
-def scrape_forecast_simple(zone_slug):
-    """Scrape forecast using simple HTTP request and regex parsing."""
+def scrape_forecast_playwright(zone_slug):
+    """Scrape forecast using Playwright for JavaScript rendering."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("Playwright not installed")
+        return None
+    
     url = f"https://nwac.us/avalanche-forecast/#{zone_slug}"
     
     try:
-        response = requests.get(url, timeout=30)
-        if response.status_code != 200:
-            return None
-        
-        html = response.text
-        
-        # Look for danger ratings in format like "2 - Moderate"
-        danger_pattern = r'(\d)\s*-\s*(Low|Moderate|Considerable|High|Extreme)'
-        
-        # Try to find the three elevation bands
-        upper = middle = lower = "Unknown"
-        
-        # Look for patterns like "Upper Elevations...2 - Moderate"
-        upper_match = re.search(
-            r'Upper Elevations[^<]*?(\d)\s*-\s*(Low|Moderate|Considerable|High|Extreme)',
-            html,
-            re.IGNORECASE | re.DOTALL
-        )
-        if upper_match:
-            upper = upper_match.group(2)
-        
-        middle_match = re.search(
-            r'Middle Elevations[^<]*?(\d)\s*-\s*(Low|Moderate|Considerable|High|Extreme)',
-            html,
-            re.IGNORECASE | re.DOTALL
-        )
-        if middle_match:
-            middle = middle_match.group(2)
-        
-        lower_match = re.search(
-            r'Lower Elevations[^<]*?(\d)\s*-\s*(Low|Moderate|Considerable|High|Extreme)',
-            html,
-            re.IGNORECASE | re.DOTALL
-        )
-        if lower_match:
-            lower = lower_match.group(2)
-        
-        # Extract publish date
-        issued_match = re.search(
-            r'ISSUED[^<]*?<[^>]*>([^<]+)',
-            html,
-            re.IGNORECASE
-        )
-        publish_date = issued_match.group(1).strip() if issued_match else datetime.now().strftime("%Y-%m-%d")
-        
-        if upper == "Unknown" and middle == "Unknown" and lower == "Unknown":
-            return None
-        
-        return {
-            "zone_name": zone_slug.replace("-", " ").title(),
-            "publish_date": publish_date,
-            "danger_above_treeline": upper,
-            "danger_near_treeline": middle,
-            "danger_below_treeline": lower,
-            "bottom_line": "",
-            "detailed_forecast": "",
-            "avalanche_problems": [],
-            "cached_at": datetime.now().isoformat()
-        }
+        print(f"Rendering {url} with Playwright...")
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.set_default_timeout(120000)  # 2 minutes
+            page.goto(url, wait_until="networkidle", timeout=120000)
+            
+            # Wait for danger labels
+            try:
+                page.wait_for_selector("text=Upper Elevations", timeout=120000)
+            except:
+                page.wait_for_timeout(5000)
+            
+            html = page.content()
+            text = page.inner_text("body")
+            browser.close()
+            
+            print(f"Successfully rendered {zone_slug}")
+            
+            # Parse the content
+            danger_pattern = r'(Low|Moderate|Considerable|High|Extreme)'
+            
+            def find_danger(label):
+                patterns = [
+                    rf"{label}.*?(?:[1-5]\s*-\s*)?{danger_pattern}",
+                    rf"{label.replace(' ','')}.*?(?:[1-5]\s*-\s*)?{danger_pattern}",
+                ]
+                for pat in patterns:
+                    m = re.search(pat, text, re.IGNORECASE | re.DOTALL)
+                    if m:
+                        return m.group(1).capitalize()
+                return "Unknown"
+            
+            upper = find_danger("Upper Elevations")
+            middle = find_danger("Middle Elevations")
+            lower = find_danger("Lower Elevations")
+            
+            if upper == "Unknown" and middle == "Unknown" and lower == "Unknown":
+                print(f"Could not parse danger levels for {zone_slug}")
+                return None
+            
+            # Extract publish date
+            issued_match = re.search(r'ISSUED[^<]*?<[^>]*>([^<]+)', html, re.IGNORECASE)
+            publish_date = issued_match.group(1).strip() if issued_match else datetime.now().strftime("%Y-%m-%d %H:%M")
+            
+            return {
+                "zone_name": zone_slug.replace("-", " ").title(),
+                "publish_date": publish_date,
+                "danger_above_treeline": upper,
+                "danger_near_treeline": middle,
+                "danger_below_treeline": lower,
+                "bottom_line": "",
+                "detailed_forecast": "",
+                "avalanche_problems": [],
+                "cached_at": datetime.now().isoformat()
+            }
     except Exception as e:
         print(f"Error scraping {zone_slug}: {e}")
         return None
@@ -102,7 +105,7 @@ def update_cache():
     forecasts = {}
     
     for zone_key, zone_slug in ZONES.items():
-        forecast = scrape_forecast_simple(zone_slug)
+        forecast = scrape_forecast_playwright(zone_slug)
         if forecast:
             forecasts[zone_key] = forecast
             print(f"✓ Cached {zone_key}")
