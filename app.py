@@ -8,13 +8,15 @@ from datetime import datetime, timedelta
 import requests
 import re
 import os
+import threading
 
 app = Flask(__name__)
 
 # In-memory cache
 cache = {
     "last_update": None,
-    "forecasts": {}
+    "forecasts": {},
+    "is_updating": False
 }
 
 # Cache duration: 6 hours
@@ -99,8 +101,7 @@ def scrape_forecast_playwright(zone_slug):
         return None
 
 
-def update_cache():
-    """Update the cache with fresh forecast data."""
+def cache["is_updating"] = True
     print("Updating forecast cache...")
     forecasts = {}
     
@@ -113,6 +114,21 @@ def update_cache():
             print(f"✗ Failed to cache {zone_key}")
     
     cache["last_update"] = datetime.now()
+    cache["forecasts"] = forecasts
+    cache["is_updating"] = False
+    print(f"Cache updated at {cache['last_update']}")
+
+
+def update_cache_background():
+    """Trigger cache update in background thread."""
+    if cache["is_updating"]:
+        print("Cache update already in progress, skipping")
+        return
+    
+    thread = threading.Thread(target=update_cache)
+    thread.daemon = True
+    thread.start()
+    print("Background cache update started
     cache["forecasts"] = forecasts
     print(f"Cache updated at {cache['last_update']}")
 
@@ -146,30 +162,33 @@ def index():
 
 
 @app.route('/health')
-def health():
-    """Health check endpoint."""
-    return jsonify({
-        "status": "ok",
-        "cache_age_seconds": (datetime.now() - cache["last_update"]).total_seconds() if cache["last_update"] else None
-    })
-
-
-@app.route('/forecast/<zone>')
-def get_forecast(zone):
-    """Get forecast for a specific zone."""
-    if zone not in ZONES:
-        return jsonify({"error": f"Unknown zone: {zone}"}), 404
-    
-    # Update cache if stale
+def heTrigger update in background if stale
     if is_cache_stale():
-        update_cache()
+        update_cache_background()
     
     forecast = cache["forecasts"].get(zone)
     if not forecast:
+        if cache["is_updating"]:
+            return jsonify({"error": "Cache is being updated, please try again in a moment"}), 503
         return jsonify({"error": f"No forecast available for {zone}"}), 404
     
     return jsonify(forecast)
 
+
+@app.route('/forecast/all')
+def get_all_forecasts():
+    """Get all forecasts."""
+    # Trigger update in background if stale
+    if is_cache_stale():
+        update_cache_background()
+    
+    return jsonify({
+        "forecasts": cache["forecasts"],
+        "cached_at": cache["last_update"].isoformat() if cache["last_update"] else None,
+        "is_updating": cache["is_updating"]
+    
+    return jsonify(forecast) (background)
+    update_cache_background
 
 @app.route('/forecast/all')
 def get_all_forecasts():
