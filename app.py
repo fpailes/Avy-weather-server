@@ -101,7 +101,9 @@ def scrape_forecast_playwright(zone_slug):
         return None
 
 
-def cache["is_updating"] = True
+def update_cache():
+    """Update the cache with fresh forecast data."""
+    cache["is_updating"] = True
     print("Updating forecast cache...")
     forecasts = {}
     
@@ -128,9 +130,7 @@ def update_cache_background():
     thread = threading.Thread(target=update_cache)
     thread.daemon = True
     thread.start()
-    print("Background cache update started
-    cache["forecasts"] = forecasts
-    print(f"Cache updated at {cache['last_update']}")
+    print("Background cache update started")
 
 
 def is_cache_stale():
@@ -162,7 +162,26 @@ def index():
 
 
 @app.route('/health')
-def heTrigger update in background if stale
+def health():
+    """Health check endpoint."""
+    cache_age = None
+    if cache["last_update"]:
+        cache_age = (datetime.now() - cache["last_update"]).total_seconds()
+    
+    return jsonify({
+        "status": "ok",
+        "cache_age_seconds": cache_age,
+        "is_updating": cache["is_updating"]
+    })
+
+
+@app.route('/forecast/<zone>')
+def get_forecast(zone):
+    """Get forecast for a specific zone."""
+    if zone not in ZONES:
+        return jsonify({"error": f"Unknown zone: {zone}"}), 404
+    
+    # Trigger update in background if stale
     if is_cache_stale():
         update_cache_background()
     
@@ -186,26 +205,12 @@ def get_all_forecasts():
         "forecasts": cache["forecasts"],
         "cached_at": cache["last_update"].isoformat() if cache["last_update"] else None,
         "is_updating": cache["is_updating"]
-    
-    return jsonify(forecast) (background)
-    update_cache_background
-
-@app.route('/forecast/all')
-def get_all_forecasts():
-    """Get all forecasts."""
-    # Update cache if stale
-    if is_cache_stale():
-        update_cache()
-    
-    return jsonify({
-        "forecasts": cache["forecasts"],
-        "cached_at": cache["last_update"].isoformat() if cache["last_update"] else None
     })
 
 
 if __name__ == '__main__':
-    # Initialize cache on startup
-    update_cache()
+    # Initialize cache on startup (background)
+    update_cache_background()
     
     # Run server
     port = int(os.environ.get('PORT', 5000))
